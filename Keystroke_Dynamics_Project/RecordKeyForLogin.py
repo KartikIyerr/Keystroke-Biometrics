@@ -1,0 +1,203 @@
+import time
+import csv
+import getpass
+
+class RecordKeyForLogin:
+    def __init__(self):
+        self.running = True
+        self.password = ".tie5Roanl"
+        self.dicTimes = dict()
+        self.user = None
+        self.entryFreq = 0
+        self.entryCount = 1
+        self.passOk = None
+        self.dicKeystrokesTimes = None
+        self.dicCSVTimes = dict()
+        self.listTimes = list()
+        self.sessionFreq = 0
+        self.sessionCount = 1
+
+    def setUser(self, user):
+        self.user = user
+
+    def setEntryFreq(self, entryFreq):
+        self.entryFreq = entryFreq
+    
+    def setSessionFreq(self, sessionFreq):
+        self.sessionFreq = sessionFreq
+
+    def KeyDownEvent(self, event):
+        try:
+            if event.Key == "Return":
+                self.dicTimes[event.Key]["keyDown"] = time.time()
+            else:
+                self.dicTimes[event.Key.lower()]["keyDown"] = time.time()
+        except KeyError:
+            pass
+
+        if event.Ascii == 27:
+            self.running = False
+
+    def KeyUpEvent(self, event):
+        try:
+            if event.Key == "Return":
+                self.dicTimes[event.Key]["keyUp"] = time.time()
+            else:
+                self.dicTimes[event.Key.lower()]["keyUp"] = time.time()
+        except KeyError:
+            pass   
+
+    def CreateDicTimes(self):
+        for char in list(self.password):
+            if char.isupper():
+                self.dicTimes[char.lower()] = {"keyUp": None, "keyDown": None}
+            elif char == ".":
+                self.dicTimes["period"] = {"keyUp": None, "keyDown": None}
+            else:
+                self.dicTimes[char] = {"keyUp": None, "keyDown": None}
+
+        self.dicTimes["Return"] = {"keyUp": None, "keyDown": None}
+    
+    def CalculateKeystrokesDynamics(self):
+        while self.sessionCount <= self.sessionFreq:
+            while self.entryCount <= self.entryFreq:
+                print("Session: {}".format(self.sessionCount) + ". Enter {} times more!".format(1+self.entryFreq-self.entryCount))
+                # input_pwd = input("Enter \'{}\' : ".format(self.password))
+                input_pwd = getpass.getpass("Enter your password: ")
+                self.passOk = False
+                
+                if input_pwd == self.password:
+                    print("pwd correct!")
+                    self.passOk = True
+                
+                self.dicKeystrokesTimes = dict()
+                self.dicKeystrokesTimes["hold_time"] = dict()
+                self.dicKeystrokesTimes["ud_key1_key2"] = dict()
+                self.dicKeystrokesTimes["dd_key1_key2"] = dict()
+                self.dicKeystrokesTimes["password_entry_count"] = self.entryCount
+                self.dicKeystrokesTimes["password_session_count"] = self.sessionCount
+
+                if self.passOk:
+                    self.entryCount = self.entryCount + 1
+                    for key in list(self.password):
+                        if key == ".":
+                            self.dicKeystrokesTimes["hold_time"]["period"] = self.dicTimes["period"]["keyUp"] - self.dicTimes["period"]["keyDown"]
+                        elif key.isupper():
+                            try:
+                                self.dicKeystrokesTimes["hold_time"][key] = self.dicTimes[key.lower()]["keyUp"] - self.dicTimes[key.lower()]["keyDown"]
+                            except Exception:
+                                self.dicKeystrokesTimes["hold_time"][key] = self.dicTimes[key]["keyUp"] - self.dicTimes[key]["keyDown"]
+                        else:
+                            self.dicKeystrokesTimes["hold_time"][key] = self.dicTimes[key]["keyUp"] - self.dicTimes[key]["keyDown"]
+
+                    for key1, key2 in zip(self.password, self.password[1:]):
+                        if key1 == "." or key2 == ".":
+                            if key1 == ".":
+                                key1 = "period"
+                            else:
+                                key2 = "period"
+                            
+                            self.dicKeystrokesTimes["dd_key1_key2"]["DD."+key1+"."+key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyDown"]
+                            self.dicKeystrokesTimes["ud_key1_key2"]["UD."+key1+"."+key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyUp"]
+                        
+                        elif key1.isupper() or key2.isupper():
+                            try:
+                                self.dicKeystrokesTimes["dd_key1_key2"]["DD." + key1 + "." + key2] = self.dicTimes[key2.lower()]["keyDown"] - self.dicTimes[key1.lower()]["keyDown"]
+                                self.dicKeystrokesTimes["ud_key1_key2"]["UD." + key1 + "." + key2] = self.dicTimes[key2.lower()]["keyDown"] - self.dicTimes[key1.lower()]["keyUp"]
+                            except Exception:
+                                self.dicKeystrokesTimes["dd_key1_key2"]["DD." + key1 + "." + key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyDown"]
+                                self.dicKeystrokesTimes["ud_key1_key2"]["UD." + key1 + "." + key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyUp"]
+                        else:
+                            self.dicKeystrokesTimes["dd_key1_key2"]["DD." + key1 + "." + key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyDown"]
+                            self.dicKeystrokesTimes["ud_key1_key2"]["UD." + key1 + "." + key2] = self.dicTimes[key2]["keyDown"] - self.dicTimes[key1]["keyUp"]
+                    
+                    time.sleep(1)
+                    self.dicKeystrokesTimes["hold_time"]["Return"] = self.dicTimes["Return"]["keyUp"] - self.dicTimes["Return"]["keyDown"]
+                    self.dicKeystrokesTimes["ud_key1_key2"]["UD." + list(self.password)[-1] + ".Return"] = self.dicTimes["Return"]["keyDown"] - self.dicTimes[list(self.password)[-1]]["keyUp"]
+                    self.dicKeystrokesTimes["dd_key1_key2"]["DD." + list(self.password)[-1] + ".Return"] = self.dicTimes["Return"]["keyDown"] - self.dicTimes[list(self.password)[-1]]["keyDown"]
+
+                    self.listTimes.append(self.dicKeystrokesTimes)
+                
+                else:
+                    print("Password entered was not correct! Please type \'{}\' again !".format(self.password))
+
+            self.entryCount = 1
+            self.sessionCount = self.sessionCount + 1
+
+        # Removed the loop waiting for ESC key
+
+        # Save results to "Predict_keystrokes.csv"
+        self.dicCSVTimes["timings"] = self.listTimes
+
+        self.CreateCSV(self.dicCSVTimes)
+                
+    def CreateCSV(self, csvFile):
+        rows = []
+
+        data = csvFile
+
+        for timing in data['timings']:
+            row = dict()
+
+            for key in timing["hold_time"].keys():
+                if key == "5":
+                    new_key = "H.five"
+                elif key == "R":
+                    new_key = "H.Shift.r"
+                else:
+                    new_key = "H."+key
+                
+                row[new_key] = timing["hold_time"][key]
+            
+            for key in timing["dd_key1_key2"].keys():
+                if key == "DD.5.R":
+                    new_key = "DD.five.Shift.r"
+                elif key == "DD.R.o":
+                    new_key = "DD.Shift.r.o"
+                elif key == "DD.e.5":
+                    new_key = "DD.e.five"
+                else:
+                    new_key = key
+                
+                row[new_key] = timing["dd_key1_key2"][key]
+
+            for key in timing["ud_key1_key2"].keys():
+                if key == "UD.5.R":
+                    new_key = "UD.five.Shift.r"
+                elif key == "UD.R.o":
+                    new_key = "UD.Shift.r.o"
+                elif key == "UD.e.5":
+                    new_key = "UD.e.five"
+                else:
+                    new_key = key
+                
+                row[new_key] = timing["ud_key1_key2"][key]
+
+            rows.append(row)
+
+        column_names = ["H.period", "DD.period.t", "UD.period.t", "H.t", "DD.t.i", "UD.t.i", "H.i", "DD.i.e", "UD.i.e", "H.e",
+                "DD.e.five", "UD.e.five", "H.five", "DD.five.Shift.r", "UD.five.Shift.r", "H.Shift.r", "DD.Shift.r.o",
+                "UD.Shift.r.o", "H.o", "DD.o.a", "UD.o.a", "H.a", "DD.a.n", "UD.a.n",   "H.n", "DD.n.l", "UD.n.l",
+                "H.l", "DD.l.Return", "UD.l.Return", "H.Return"]
+
+        try:
+            with open('output/Predict_keystrokes.csv', 'w', newline='') as csvOutputFile:
+                writer = csv.DictWriter(csvOutputFile, fieldnames=column_names)
+                
+                # If the file is empty, write the header
+                if csvOutputFile.tell() == 0:
+                    writer.writeheader()
+                
+                for r in rows:
+                    writer.writerow(r)
+        except IOError:
+            print("Error writing CSV output file.")
+
+if __name__ == "__main__":
+    recorder = RecordKeyForLogin()
+
+    try:
+        recorder.CreateDicTimes()
+        recorder.CalculateKeystrokesDynamics()
+    except KeyboardInterrupt:
+        pass  # Catch KeyboardInterrupt when Ctrl+C is pressed
